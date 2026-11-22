@@ -49,7 +49,58 @@ Replace **YOUR-GOMODEL-DOMAIN** with the public HTTPS hostname of the GoModel de
 
 Restart the Hermes gateway after saving the configuration.
 
-## 3. Verify the relay
+## 3. Make Hermes Persian-first
+
+The relay only transports Telegram Bot API requests; language behavior belongs to Hermes.
+
+### Persian voice-message transcription
+
+In the existing top-level `stt` section of `config.yaml`, set the global language to Persian:
+
+~~~yaml
+stt:
+  enabled: true
+  language: "fa"
+~~~
+
+If `stt` already exists, change its existing `language: "en"` to `language: "fa"`; do not add a second `stt` block. Leave provider-specific `language` overrides blank or set them to `fa`, because a non-empty provider-specific value takes precedence over the global setting. The ISO-639-1 code for Persian is `fa`.
+
+### Persian text replies
+
+Hermes loads its durable identity from `SOUL.md`. On Windows, edit:
+
+~~~text
+C:\Users\MOHSEN\.hermes\SOUL.md
+~~~
+
+Keep any existing content and append:
+
+~~~markdown
+## Language
+- Always reply in Persian (Farsi), using natural, clear Iranian Persian.
+- Keep explanations, confirmations, errors, and tool summaries in Persian.
+- Preserve names of APIs, commands, configuration keys, paths, and code exactly when needed.
+- Do not translate code, identifiers, URLs, or literal command output.
+- For Persian voice messages, transcribe into Persian script; do not translate them into English.
+- Use another language only when I explicitly request it or when quoting source text is necessary.
+~~~
+
+### Optional Persian spoken replies
+
+To make Hermes' spoken replies use a Persian voice, merge this into the existing top-level `tts` section:
+
+~~~yaml
+tts:
+  provider: "edge"
+  edge:
+    voice: "fa-IR-DilaraNeural"
+~~~
+
+For a male Persian voice, use `fa-IR-FaridNeural` instead. This selects the voice but does not by itself turn on automatic voice replies; Telegram's `/voice tts` command or the separate `voice.auto_tts` setting controls when spoken replies are sent.
+
+Restart the Hermes gateway after changing these settings.
+
+## 4. Verify the relay
 
 From the Hermes machine, request **getMe** through the relay:
 
