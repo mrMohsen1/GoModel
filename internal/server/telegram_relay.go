@@ -2,10 +2,13 @@ package server
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+
+	"github.com/labstack/echo/v5"
 	"net/url"
 	"os"
 	"strings"
@@ -60,8 +63,25 @@ func newTelegramRelayTransport() http.RoundTripper {
 		MaxConnsPerHost:       4,
 		IdleConnTimeout:       30 * time.Second,
 		TLSHandshakeTimeout:   8 * time.Second,
-		ResponseHeaderTimeout: 25 * time.Second,
+		ResponseHeaderTimeout: 65 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+	}
+}
+
+
+// telegramRelayWriteDeadlineMiddleware removes the gateway's short absolute
+// write deadline for Telegram routes. getUpdates may legitimately wait up to
+// 50 seconds before the upstream responds; the outbound transport still has a
+// finite response-header timeout and connection limits.
+func telegramRelayWriteDeadlineMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			controller := http.NewResponseController(c.Response())
+			if err := controller.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				return err
+			}
+			return next(c)
+		}
 	}
 }
 
