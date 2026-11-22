@@ -16,6 +16,11 @@ ARG TARGETVARIANT
 
 WORKDIR /app
 
+# Keep compilation memory predictable on small hosted builders.
+# Go otherwise compiles several packages in parallel, which can exceed the
+# memory budget before the final binary is linked.
+ENV GOMAXPROCS=1 GOGC=50
+
 # Download dependencies first for better layer caching.
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
@@ -27,7 +32,7 @@ COPY --from=frontend /app/internal/admin/dashboard/static/dist ./internal/admin/
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -p=1 \
 	-trimpath -tags=grpcnotrace \
 	-ldflags="-s -w -X github.com/enterpilot/gomodel/internal/version.Version=${VERSION} -X github.com/enterpilot/gomodel/internal/version.Commit=${COMMIT} -X github.com/enterpilot/gomodel/internal/version.Date=${DATE}" \
 	-o /gomodel ./cmd/gomodel
