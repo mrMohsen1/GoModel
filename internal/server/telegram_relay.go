@@ -68,14 +68,18 @@ func newTelegramRelayTransport() http.RoundTripper {
 	}
 }
 
-// telegramRelayWriteDeadlineMiddleware gives Telegram long polling more
-// than the gateway's short default write deadline without leaving slow clients
-// able to hold a connection forever.
-func telegramRelayWriteDeadlineMiddleware() echo.MiddlewareFunc {
+// telegramRelayDeadlinesMiddleware lets ordinary Bot API long polls and
+// streamed media uploads outlive GoModel's short server-wide HTTP deadlines.
+// The deadlines remain finite so a slow or abandoned client cannot pin a
+// connection indefinitely.
+func telegramRelayDeadlinesMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			controller := http.NewResponseController(c.Response())
-			deadline := time.Now().Add(2 * time.Minute)
+			deadline := time.Now().Add(5 * time.Minute)
+			if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				return err
+			}
 			if err := controller.SetWriteDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
 				return err
 			}
