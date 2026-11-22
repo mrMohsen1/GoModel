@@ -64,5 +64,8 @@ A successful response contains **ok: true** and the actual bot's metadata. Do no
 
 - No Telegram **logOut** migration is needed. The relay still talks to Telegram's public Bot API; it is not a self-hosted Telegram Bot API server.
 - The relay uses GoModel's existing HTTP listener and does not start another process or open another port.
-- The default GoModel request body limit is 10 MB. Raise **BODY_SIZE_LIMIT** only if larger Telegram uploads are required; GoModel validates this setting up to 100 MB.
+- GoModel defaults to a 10 MB inbound request-body limit. To pass Telegram uploads up to 50 MB, set **BODY_SIZE_LIMIT=55M** on Deplexo and redeploy. GoModel validates this setting up to 100 MB. The relay streams request bodies and does not intentionally buffer the complete media file in memory.
+- Telegram's public Bot API still limits **getFile downloads to 20 MB**. This relay does not lift that Telegram-side limit; larger inbound media needs a local Telegram Bot API server, which is heavier and is not part of this relay.
+- Hermes can handle the message and attachment types implemented by its Telegram adapter (text, photos, documents, video, audio/voice, contacts, locations and stickers, with some sticker types represented only by metadata). The relay forwards Bot API calls; it cannot add message types that Hermes or Telegram do not support.
 - The relay uses a small outbound connection pool and a fixed upstream host. It does not accept arbitrary destination URLs.
+- For a private bot, set **TELEGRAM_ALLOWED_USERS** in Hermes to your numeric Telegram user ID. Do not leave the bot open to arbitrary users.
