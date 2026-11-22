@@ -591,8 +591,8 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 		relayHandler := echo.WrapHandler(telegramRelay)
 		relayDeadlines := telegramRelayDeadlinesMiddleware()
 		e.GET("/telegram/*", relayHandler, relayDeadlines)
-		e.HEAD("/telegram/*", relayHandler, relayDeadline)
-		e.POST("/telegram/*", relayHandler, relayDeadline)
+		e.HEAD("/telegram/*", relayHandler, relayDeadlines)
+		e.POST("/telegram/*", relayHandler, relayDeadlines)
 	}
 	e.POST("/v1/files", handler.CreateFile)
 	e.GET("/v1/files", handler.ListFiles)
