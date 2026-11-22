@@ -18,14 +18,14 @@ TELEGRAM_RELAY_BOT_TOKEN=<the-real-token-from-BotFather>
 TELEGRAM_RELAY_CLIENT_TOKEN=<a-long-random-secret-used-only-by-Hermes>
 ~~~
 
-Use a long random value for the client token (at least 32 random bytes, encoded as letters and digits). Keep both values secret. Redeploy GoModel after setting them.
+Use a long random value for the client token (at least 32 random bytes, encoded as letters and digits). Keep it separate from the BotFather token and do not reuse a GoModel API key. Keep both values secret. Redeploy GoModel after setting them.
 
 The relay exposes these paths on the existing HTTPS domain:
 
 - Bot API: **/telegram/bot<CLIENT_TOKEN>/<method>**
 - File downloads: **/telegram/file/bot<CLIENT_TOKEN>/<file_path>**
 
-The client token is checked on every request. The real Telegram token is never accepted from the request and is redacted from GoModel application logs.
+The client token is checked on every request. The real Telegram token is never accepted from the request. The client token is redacted from GoModel request logs, and upstream errors are returned without URLs or credentials.
 
 ## 2. Configure Hermes on Windows
 
