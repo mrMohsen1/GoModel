@@ -18,7 +18,23 @@ TELEGRAM_RELAY_BOT_TOKEN=<the-real-token-from-BotFather>
 TELEGRAM_RELAY_CLIENT_TOKEN=<a-long-random-secret-used-only-by-Hermes>
 ~~~
 
-Use a cryptographically random client token of at least 32 bytes (64 hexadecimal characters is convenient). Keep it separate from the BotFather token and do not reuse a GoModel API key. Because the client token appears in the relay URL, check whether your hosting provider stores raw request paths in edge access logs; rotate the client token if it may have been exposed. Keep both values secret. Redeploy GoModel after setting them.
+Important: Hermes validates `TELEGRAM_BOT_TOKEN` using Telegram's token shape (`digits:secret`). Therefore the client token must have that shape too; a plain 64-character hex string would be rejected by Hermes before it reaches this relay.
+
+Generate a compatible, independent client token in Windows PowerShell 5.1 (the command copies it to the clipboard and does not print it):
+
+~~~powershell
+$bytes = New-Object byte[] 36
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$number = 100000000 + ([BitConverter]::ToUInt32($bytes, 0) % 900000000)
+$secret = -join ($bytes[4..35] | ForEach-Object { $_.ToString("x2") })
+$clientToken = "{0}:{1}" -f $number, $secret
+Set-Clipboard -Value $clientToken
+$rng.Dispose()
+Write-Host "Client token generated and copied. Keep it secret."
+~~~
+
+Use this generated value as `TELEGRAM_RELAY_CLIENT_TOKEN` on GoModel and as `TELEGRAM_BOT_TOKEN` in Hermes. It is not the real BotFather token. Do not reuse a GoModel API key. Because the client token appears in the relay URL, check whether your hosting provider stores raw request paths in edge access logs; rotate the client token if it may have been exposed. Keep both values secret. Redeploy GoModel after setting them.
 
 The relay exposes these paths on the existing HTTPS domain:
 
