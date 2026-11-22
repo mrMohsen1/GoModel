@@ -297,6 +297,7 @@
                             "guides/openclaw",
                             "guides/n8n",
                             "guides/openwebui",
+                            "guides/telegram-relay",
                             "guides/librechat",
                             {
                                 "group": "AI coding harnesses",
