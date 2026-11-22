@@ -1,0 +1,138 @@
+---
+title: Telegram Bot API Relay
+description: Route Hermes Telegram Bot API traffic through an authenticated, single-bot relay on the GoModel server.
+---
+
+# Telegram Bot API Relay
+
+GoModel can optionally relay Telegram Bot API requests for one configured bot. This is useful when the machine running Hermes cannot reach Telegram directly but the GoModel host can.
+
+The relay is disabled unless both **TELEGRAM_RELAY_BOT_TOKEN** and **TELEGRAM_RELAY_CLIENT_TOKEN** are set. The real Telegram token stays on the GoModel host. Hermes uses a separate random client token that GoModel maps to the real bot token. The relay forwards only to **https://api.telegram.org**; it is not a general-purpose HTTP or SOCKS proxy.
+
+## 1. Configure the GoModel host
+
+Set these environment variables in the GoModel deployment:
+
+~~~env
+TELEGRAM_RELAY_BOT_TOKEN=<the-real-token-from-BotFather>
+TELEGRAM_RELAY_CLIENT_TOKEN=<a-long-random-secret-used-only-by-Hermes>
+~~~
+
+Important: Hermes validates `TELEGRAM_BOT_TOKEN` using Telegram's token shape (`digits:secret`). Therefore the client token must have that shape too; a plain 64-character hex string would be rejected by Hermes before it reaches this relay.
+
+Generate a compatible, independent client token in Windows PowerShell 5.1 (the command copies it to the clipboard and does not print it):
+
+~~~powershell
+$bytes = New-Object byte[] 36
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$number = 100000000 + ([BitConverter]::ToUInt32($bytes, 0) % 900000000)
+$secret = -join ($bytes[4..35] | ForEach-Object { $_.ToString("x2") })
+$clientToken = "{0}:{1}" -f $number, $secret
+Set-Clipboard -Value $clientToken
+$rng.Dispose()
+Write-Host "Client token generated and copied. Keep it secret."
+~~~
+
+Use this generated value as `TELEGRAM_RELAY_CLIENT_TOKEN` on GoModel and as `TELEGRAM_BOT_TOKEN` in Hermes. It is not the real BotFather token. Do not reuse a GoModel API key. Because the client token appears in the relay URL, check whether your hosting provider stores raw request paths in edge access logs; rotate the client token if it may have been exposed. Keep both values secret. Redeploy GoModel after setting them.
+
+The relay exposes these paths on the existing HTTPS domain:
+
+- Bot API: `/telegram/bot<CLIENT_TOKEN>/<method>`
+- File downloads: `/telegram/file/bot<CLIENT_TOKEN>/<file_path>`
+
+The client token is checked on every request. The real Telegram token is never accepted from the request. The client token is redacted from GoModel request logs, and upstream errors are returned without URLs or credentials.
+
+## 2. Configure Hermes on Windows
+
+In Hermes' **.env**, set **TELEGRAM_BOT_TOKEN** to the client token, not the real BotFather token:
+
+~~~env
+TELEGRAM_BOT_TOKEN=<the-same-client-token-configured-on-GoModel>
+~~~
+
+In Hermes' **config.yaml**, add the following under the existing **platforms** section:
+
+~~~yaml
+platforms:
+  telegram:
+    extra:
+      base_url: "https://YOUR-GOMODEL-DOMAIN/telegram/bot"
+      base_file_url: "https://YOUR-GOMODEL-DOMAIN/telegram/file/bot"
+~~~
+
+Replace **YOUR-GOMODEL-DOMAIN** with the public HTTPS hostname of the GoModel deployment. Do not set **local_mode**; this relay forwards to Telegram's public Bot API and is not a self-hosted Telegram Bot API server.
+
+Restart the Hermes gateway after saving the configuration.
+
+## 3. Make Hermes Persian-first
+
+The relay only transports Telegram Bot API requests; language behavior belongs to Hermes.
+
+### Persian voice-message transcription
+
+In the existing top-level `stt` section of `config.yaml`, set the global language to Persian:
+
+~~~yaml
+stt:
+  enabled: true
+  language: "fa"
+~~~
+
+If `stt` already exists, change its existing `language: "en"` to `language: "fa"`; do not add a second `stt` block. Leave provider-specific `language` overrides blank or set them to `fa`, because a non-empty provider-specific value takes precedence over the global setting. The ISO-639-1 code for Persian is `fa`.
+
+### Persian text replies
+
+Hermes loads its durable identity from `SOUL.md`. On Windows, edit:
+
+~~~text
+C:\Users\MOHSEN\.hermes\SOUL.md
+~~~
+
+Keep any existing content and append:
+
+~~~markdown
+## Language
+- Always reply in Persian (Farsi), using natural, clear Iranian Persian.
+- Keep explanations, confirmations, errors, and tool summaries in Persian.
+- Preserve names of APIs, commands, configuration keys, paths, and code exactly when needed.
+- Do not translate code, identifiers, URLs, or literal command output.
+- For Persian voice messages, transcribe into Persian script; do not translate them into English.
+- Use another language only when I explicitly request it or when quoting source text is necessary.
+~~~
+
+### Optional Persian spoken replies
+
+To make Hermes' spoken replies use a Persian voice, merge this into the existing top-level `tts` section:
+
+~~~yaml
+tts:
+  provider: "edge"
+  edge:
+    voice: "fa-IR-DilaraNeural"
+~~~
+
+For a male Persian voice, use `fa-IR-FaridNeural` instead. This selects the voice but does not by itself turn on automatic voice replies; Telegram's `/voice tts` command or the separate `voice.auto_tts` setting controls when spoken replies are sent.
+
+Restart the Hermes gateway after changing these settings.
+
+## 4. Verify the relay
+
+From the Hermes machine, request **getMe** through the relay:
+
+~~~powershell
+$clientToken = $env:TELEGRAM_BOT_TOKEN
+Invoke-RestMethod "https://YOUR-GOMODEL-DOMAIN/telegram/bot$clientToken/getMe"
+~~~
+
+A successful response contains **ok: true** and the actual bot's metadata. Do not paste the full request URL into support messages.
+
+## Notes and limits
+
+- No Telegram **logOut** migration is needed. The relay still talks to Telegram's public Bot API; it is not a self-hosted Telegram Bot API server.
+- The relay uses GoModel's existing HTTP listener and does not start another process or open another port.
+- GoModel defaults to a 10 MB inbound request-body limit. To pass Telegram uploads up to 50 MB, set **BODY_SIZE_LIMIT=55M** on Deplexo and redeploy. GoModel validates this setting up to 100 MB. The relay streams request bodies and does not intentionally buffer the complete media file in memory.
+- Telegram's public Bot API still limits **getFile downloads to 20 MB**. This relay does not lift that Telegram-side limit; larger inbound media needs a local Telegram Bot API server, which is heavier and is not part of this relay.
+- Hermes can handle the message and attachment types implemented by its Telegram adapter (text, photos, documents, video, audio/voice, contacts, locations and stickers, with some sticker types represented only by metadata). The relay forwards Bot API calls; it cannot add message types that Hermes or Telegram do not support.
+- The relay uses a small outbound connection pool and a fixed upstream host. It does not accept arbitrary destination URLs.
+- For a private bot, set **TELEGRAM_ALLOWED_USERS** in Hermes to your numeric Telegram user ID. Do not leave the bot open to arbitrary users.

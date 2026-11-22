@@ -285,8 +285,14 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 		handler.SetConversationStore(cfg.ConversationStore)
 	}
 
-	// Build list of paths that skip authentication
+	// Build list of paths that skip authentication.
+	// The Telegram relay authenticates its single configured client token in
+	// the path itself because the Telegram Bot API client cannot add a custom header.
+	telegramRelay := newTelegramRelayFromEnv()
 	authSkipPaths := []string{"/health", "/health/ready", "/version"}
+	if telegramRelay != nil {
+		authSkipPaths = append(authSkipPaths, "/telegram/*")
+	}
 
 	// Determine metrics path
 	metricsPath := config.ResolveMetricsEndpoint("")
@@ -576,6 +582,17 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 		e.POST("/mcp/:server", handler.MCPServer)
 		e.GET("/mcp/:server", handler.MCPServer)
 		e.DELETE("/mcp/:server", handler.MCPServer)
+	}
+
+	// Optional Telegram Bot API relay. It is disabled unless both relay
+	// credentials are configured. Telegram getUpdates can long-poll, so its
+	// response deadline is independent of the gateway's short default write timeout.
+	if telegramRelay != nil {
+		relayHandler := echo.WrapHandler(telegramRelay)
+		relayDeadlines := telegramRelayDeadlinesMiddleware()
+		e.GET("/telegram/*", relayHandler, relayDeadlines)
+		e.HEAD("/telegram/*", relayHandler, relayDeadlines)
+		e.POST("/telegram/*", relayHandler, relayDeadlines)
 	}
 	e.POST("/v1/files", handler.CreateFile)
 	e.GET("/v1/files", handler.ListFiles)
