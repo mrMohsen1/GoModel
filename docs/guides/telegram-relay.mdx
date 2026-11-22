@@ -1,0 +1,68 @@
+---
+title: Telegram Bot API Relay
+description: Route Hermes Telegram Bot API traffic through an authenticated, single-bot relay on the GoModel server.
+---
+
+# Telegram Bot API Relay
+
+GoModel can optionally relay Telegram Bot API requests for one configured bot. This is useful when the machine running Hermes cannot reach Telegram directly but the GoModel host can.
+
+The relay is disabled unless both **TELEGRAM_RELAY_BOT_TOKEN** and **TELEGRAM_RELAY_CLIENT_TOKEN** are set. The real Telegram token stays on the GoModel host. Hermes uses a separate random client token that GoModel maps to the real bot token. The relay forwards only to **https://api.telegram.org**; it is not a general-purpose HTTP or SOCKS proxy.
+
+## 1. Configure the GoModel host
+
+Set these environment variables in the GoModel deployment:
+
+~~~env
+TELEGRAM_RELAY_BOT_TOKEN=<the-real-token-from-BotFather>
+TELEGRAM_RELAY_CLIENT_TOKEN=<a-long-random-secret-used-only-by-Hermes>
+~~~
+
+Use a long random value for the client token (at least 32 random bytes, encoded as letters and digits). Keep both values secret. Redeploy GoModel after setting them.
+
+The relay exposes these paths on the existing HTTPS domain:
+
+- Bot API: **/telegram/bot<CLIENT_TOKEN>/<method>**
+- File downloads: **/telegram/file/bot<CLIENT_TOKEN>/<file_path>**
+
+The client token is checked on every request. The real Telegram token is never accepted from the request and is redacted from GoModel application logs.
+
+## 2. Configure Hermes on Windows
+
+In Hermes' **.env**, set **TELEGRAM_BOT_TOKEN** to the client token, not the real BotFather token:
+
+~~~env
+TELEGRAM_BOT_TOKEN=<the-same-client-token-configured-on-GoModel>
+~~~
+
+In Hermes' **config.yaml**, add the following under the existing **platforms** section:
+
+~~~yaml
+platforms:
+  telegram:
+    extra:
+      base_url: "https://YOUR-GOMODEL-DOMAIN/telegram/bot"
+      base_file_url: "https://YOUR-GOMODEL-DOMAIN/telegram/file/bot"
+~~~
+
+Replace **YOUR-GOMODEL-DOMAIN** with the public HTTPS hostname of the GoModel deployment. Do not set **local_mode**; this relay forwards to Telegram's public Bot API and is not a self-hosted Telegram Bot API server.
+
+Restart the Hermes gateway after saving the configuration.
+
+## 3. Verify the relay
+
+From the Hermes machine, request **getMe** through the relay:
+
+~~~powershell
+$clientToken = $env:TELEGRAM_BOT_TOKEN
+Invoke-RestMethod "https://YOUR-GOMODEL-DOMAIN/telegram/bot$clientToken/getMe"
+~~~
+
+A successful response contains **ok: true** and the actual bot's metadata. Do not paste the full request URL into support messages.
+
+## Notes and limits
+
+- No Telegram **logOut** migration is needed. The relay still talks to Telegram's public Bot API; it is not a self-hosted Telegram Bot API server.
+- The relay uses GoModel's existing HTTP listener and does not start another process or open another port.
+- The default GoModel request body limit is 10 MB. Raise **BODY_SIZE_LIMIT** only if larger Telegram uploads are required; GoModel validates this setting up to 100 MB.
+- The relay uses a small outbound connection pool and a fixed upstream host. It does not accept arbitrary destination URLs.
