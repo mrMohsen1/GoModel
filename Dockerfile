@@ -1,4 +1,13 @@
-# Build stage — run on the build host's native arch for speed, cross-compile for target
+# Build the admin dashboard using the same Node release as the project CI.
+# The dashboard is embedded into the Go binary at internal/admin/dashboard/static/dist.
+FROM node:22.23.2-bookworm-slim AS frontend
+WORKDIR /app/web/dashboard
+COPY web/dashboard/package.json web/dashboard/package-lock.json ./
+RUN npm ci --no-audit --no-fund --ignore-scripts
+COPY web/dashboard/ ./
+RUN npm run build
+
+# Build stage — run on the build host's native arch, cross-compile for target.
 FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24 AS builder
 
 ARG TARGETOS
@@ -7,12 +16,14 @@ ARG TARGETVARIANT
 
 WORKDIR /app
 
-# Download dependencies first for better layer caching
+# Download dependencies first for better layer caching.
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-# Copy source and cross-compile for the target platform.
+# Copy Go source and the dashboard artifact, then cross-compile.
 COPY . .
+COPY --from=frontend /app/internal/admin/dashboard/static/dist ./internal/admin/dashboard/static/dist
+
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
