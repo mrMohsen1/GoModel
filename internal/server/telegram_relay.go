@@ -68,15 +68,15 @@ func newTelegramRelayTransport() http.RoundTripper {
 	}
 }
 
-// telegramRelayWriteDeadlineMiddleware removes the gateway's short absolute
-// write deadline for Telegram routes. getUpdates may legitimately wait up to
-// 50 seconds before the upstream responds; the outbound transport still has a
-// finite response-header timeout and connection limits.
+// telegramRelayWriteDeadlineMiddleware gives Telegram long polling more
+// than the gateway's short default write deadline without leaving slow clients
+// able to hold a connection forever.
 func telegramRelayWriteDeadlineMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			controller := http.NewResponseController(c.Response())
-			if err := controller.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			deadline := time.Now().Add(2 * time.Minute)
+			if err := controller.SetWriteDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
 				return err
 			}
 			return next(c)
