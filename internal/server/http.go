@@ -589,8 +589,8 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 	// response deadline is independent of the gateway's short default write timeout.
 	if telegramRelay != nil {
 		relayHandler := echo.WrapHandler(telegramRelay)
-		relayDeadline := telegramRelayWriteDeadlineMiddleware()
-		e.GET("/telegram/*", relayHandler, relayDeadline)
+		relayDeadlines := telegramRelayDeadlinesMiddleware()
+		e.GET("/telegram/*", relayHandler, relayDeadlines)
 		e.HEAD("/telegram/*", relayHandler, relayDeadline)
 		e.POST("/telegram/*", relayHandler, relayDeadline)
 	}
