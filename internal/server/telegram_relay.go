@@ -188,7 +188,7 @@ func validTelegramMethod(method string) bool {
 		ch := method[i]
 		isLetter := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 		isDigit := ch >= '0' && ch <= '9'
-		if !isLetter && !(i > 0 && (isDigit || ch == '_')) {
+		if !(isLetter || (i > 0 && (isDigit || ch == '_'))) {
 			return false
 		}
 	}
