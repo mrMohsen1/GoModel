@@ -585,12 +585,14 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 	}
 
 	// Optional Telegram Bot API relay. It is disabled unless both relay
-	// credentials are configured.
+	// credentials are configured. Telegram getUpdates can long-poll, so its
+	// response deadline is independent of the gateway's short default write timeout.
 	if telegramRelay != nil {
 		relayHandler := echo.WrapHandler(telegramRelay)
-		e.GET("/telegram/*", relayHandler)
-		e.HEAD("/telegram/*", relayHandler)
-		e.POST("/telegram/*", relayHandler)
+		relayDeadline := telegramRelayWriteDeadlineMiddleware()
+		e.GET("/telegram/*", relayHandler, relayDeadline)
+		e.HEAD("/telegram/*", relayHandler, relayDeadline)
+		e.POST("/telegram/*", relayHandler, relayDeadline)
 	}
 	e.POST("/v1/files", handler.CreateFile)
 	e.GET("/v1/files", handler.ListFiles)
