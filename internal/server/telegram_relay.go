@@ -7,12 +7,12 @@ import (
 	"io"
 	"net"
 	"net/http"
-
-	"github.com/labstack/echo/v5"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/labstack/echo/v5"
 )
 
 const (
@@ -67,7 +67,6 @@ func newTelegramRelayTransport() http.RoundTripper {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 }
-
 
 // telegramRelayWriteDeadlineMiddleware removes the gateway's short absolute
 // write deadline for Telegram routes. getUpdates may legitimately wait up to
